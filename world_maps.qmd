@@ -1,0 +1,164 @@
+---
+title: "World Maps"
+author: Andy Pickering
+date-modified: today
+format: 
+  html:
+    toc: true
+editor: visual
+bibliography: references.bib
+---
+
+# Introduction
+
+This notebook demonstrates how to make choropleth maps of countries.
+
+## Load libraries
+
+```{r}
+#| label: Load libraries
+
+suppressPackageStartupMessages(library(tidyverse))
+library(rnaturalearth)
+library(leaflet)
+
+```
+
+To make our map we will need (1) shapefile of countries and (2) the data we want to display in our choropleth.
+
+There are many possible sources of data, here I use the *rnaturalearth* [@rnaturalearth] package to download both shapefiles and data including population and gdp.
+
+```{r}
+#| label: Get countries data
+
+ne_countries <- rnaturalearth::ne_countries(returnclass = 'sf') 
+
+# keep only the fields we need here
+ne_countries <- ne_countries |>
+  select(featurecla, name, continent, region_un, pop_est, gdp_md ,geometry)
+
+ne_countries |>
+  DT::datatable(rownames = FALSE)
+
+```
+
+## Basic map of countries
+
+First we'll make a basic map of the country shapes using *leaflet* [@leaflet-2]
+
+```{r}
+#| label: fig-leaflet-countries-map
+#| fig-cap: Leaflet map of countries.
+
+leaflet() |>
+  leaflet::addPolygons(data = ne_countries,
+                       weight = 1,
+                       color = "black",
+                       popup = ~name,
+                       fillColor = 'gray',
+                       fillOpacity = 0.6)
+
+```
+
+## Choropleth of population
+
+Next we'll make the map into a choropleth, where the color represents the population of each country. The data returned from *rnaturalearth* already contains population data so we don't need to join anything.
+
+::: callout-tip
+Instead of changing variable names throughout the leaflet map code for changing maps, I find that it is easier to write the mapping code to use a generic dataframe such as \*dat_to_map\*, and modify this dataframe when I want to modify what is being mapped.
+:::
+
+```{r}
+
+# the data we are mapping
+dat_to_map <- ne_countries
+
+# change population units to millions
+dat_to_map <- dat_to_map |>
+  mutate(val_to_map = pop_est/1e6) |>
+  filter(pop_est > 0)
+
+choropleth_val_label <- "Population [M] <br>"
+
+
+make_leaflet_choropleth <- function(dat_to_map, choropleth_val_label){
+# create color palette for choropleth based on chosen data to plot
+col_pal <- leaflet::colorNumeric(palette = "viridis",
+                                 domain = dat_to_map$val_to_map)
+
+  leaflet() %>% 
+  leaflet::addPolygons(data = dat_to_map,
+                       weight = 1,
+                       color = "black",
+                       popup = paste(dat_to_map$name, "<br>",
+                            round(dat_to_map$val_to_map) ),
+                       fillColor = ~col_pal(val_to_map),
+                       fillOpacity = 0.6) %>% 
+  addLegend(data = dat_to_map,
+            pal = col_pal,
+            values = ~val_to_map,
+            opacity = 1,
+            title = choropleth_val_label
+            )
+
+}
+
+m <- make_leaflet_choropleth(dat_to_map, choropleth_val_label)
+m
+```
+
+## Choropleth of gdp
+
+```{r}
+
+# the data we are mapping
+dat_to_map <- ne_countries |>
+  mutate(val_to_map = gdp_md)
+
+choropleth_val_label <- "GDP"
+
+m <- make_leaflet_choropleth(dat_to_map, choropleth_val_label)
+m
+
+```
+
+## Get data for one continent
+
+The \*rnaturalearth\* package also allows us to retrieve data for just a single continent.
+
+```{r}
+
+df_Africa <- rnaturalearth::ne_countries(continent = 'Africa', returnclass = 'sf')
+
+leaflet() %>% 
+  addPolygons(data = df_Africa,
+              weight = 1,
+                       color = "black",
+                       popup = ~name,
+                       fillColor = 'gray',
+                       fillOpacity = 0.6)
+
+```
+
+```{r}
+#| label: fig-africa-choropleth-gdp
+#| fig-cap: Interactive chorolpleth of GDP for African countries
+
+dat_to_map <- df_Africa |>
+  mutate(val_to_map = gdp_md)
+
+
+m <- make_leaflet_choropleth(dat_to_map, choropleth_val_label)
+m
+
+```
+
+# SessionInfo
+
+```{r}
+
+sessionInfo()
+
+```
+
+# References
