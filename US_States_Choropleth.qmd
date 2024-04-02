@@ -5,7 +5,9 @@ date-modified: today
 format: 
   html:
     toc: true
+    code-link: true
 editor: visual
+#bibliography: references.bib
 bibliography: references.bib
 ---
 
@@ -39,6 +41,7 @@ First we will need a shapefile with the state boundaries. This could be obtained
 
 # filter to lower 48 states only for now
 states_sf <- tigris::states(cb = TRUE, progress_bar = FALSE) %>%
+  sf::st_transform(crs = 4326) |>
   janitor::clean_names() %>% 
   mutate(statefp = as.numeric(statefp)) %>%
   filter(statefp < 60, # Keep only lower 48 US states
@@ -51,7 +54,7 @@ glimpse(states_sf)
 
 # Leaflet base map
 
-First I'll just make a basic leaflet [@leaflet map] with the state boundaries.
+First I'll just make a basic *Leaflet* [@leaflet] map with the state boundaries.
 
 ```{r Leaflet base map}
 
@@ -67,7 +70,7 @@ First I'll just make a basic leaflet [@leaflet map] with the state boundaries.
 
 # Population Data
 
-For the choropleth map I will use state population as the variable to show. I'll get state population data from the @tidycensus package. If you haven't used this package before you will need to obtain a free API key. I have stored my API key in my .Renviron file.
+For the choropleth map I will use state population as the variable to show. I'll get state population data from the \*tidycensus\* [@tidycensus] package. If you haven't used this package before you will need to obtain a free API key. I have stored my API key in my .Renviron file.
 
 ```{r}
 
@@ -212,11 +215,11 @@ ggplot() +
 ```
 
 # SessionInfo
+
 ```{r}
 
 sessionInfo()
 
 ```
-
 
 # References

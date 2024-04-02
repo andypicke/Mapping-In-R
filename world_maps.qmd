@@ -5,6 +5,8 @@ date-modified: today
 format: 
   html:
     toc: true
+    fig-cap-location: bottom
+    fig-width: 9
 editor: visual
 bibliography: references.bib
 ---
@@ -20,7 +22,7 @@ This notebook demonstrates how to make choropleth maps of countries.
 
 suppressPackageStartupMessages(library(tidyverse))
 library(rnaturalearth)
-library(leaflet)
+suppressPackageStartupMessages(library(leaflet))
 
 ```
 
@@ -35,7 +37,7 @@ ne_countries <- rnaturalearth::ne_countries(returnclass = 'sf')
 
 # keep only the fields we need here
 ne_countries <- ne_countries |>
-  select(featurecla, name, continent, region_un, pop_est, gdp_md ,geometry)
+  select(name, continent, region_un, pop_est, gdp_md ,geometry)
 
 ne_countries |>
   DT::datatable(rownames = FALSE)
