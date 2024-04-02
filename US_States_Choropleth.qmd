@@ -1,0 +1,222 @@
+---
+title: "Creating a choropleth with US States"
+author: Andy Pickering
+date-modified: today
+format: 
+  html:
+    toc: true
+editor: visual
+bibliography: references.bib
+---
+
+# Introduction
+
+This notebook demonstrates how to create a choropleth map of data (in this case state populations) for US states.
+
+-   install.packages('sf', repos = c('[https://r-spatial.r-universe.dev'))](https://r-spatial.r-universe.dev')))
+
+# Load Packages
+
+```{r }
+#| label: Load packages
+
+suppressPackageStartupMessages(library(tidyverse))
+library(tigris)
+options(tigris_use_cache = TRUE)
+suppressPackageStartupMessages(library(janitor))
+library(rmapshaper)
+library(leaflet)
+library(tidycensus)
+
+```
+
+# Get Shapefile for states
+
+First we will need a shapefile with the state boundaries. This could be obtained from many different sources, but I have found one of the easiest ways is use the *tigris* [@tigris] package.
+
+```{r }
+#| label: Get States Shapefile
+
+# filter to lower 48 states only for now
+states_sf <- tigris::states(cb = TRUE, progress_bar = FALSE) %>%
+  janitor::clean_names() %>% 
+  mutate(statefp = as.numeric(statefp)) %>%
+  filter(statefp < 60, # Keep only lower 48 US states
+        !statefp %in% c(2, 15)) %>%
+  rmapshaper::ms_simplify()
+
+glimpse(states_sf)
+
+```
+
+# Leaflet base map
+
+First I'll just make a basic leaflet [@leaflet map] with the state boundaries.
+
+```{r Leaflet base map}
+
+  leaflet() %>% 
+  leaflet::addPolygons(data = states_sf,
+                       weight = 1,
+                       color = "black",
+                       popup = ~states_sf$name,
+                       fillColor = 'gray',
+                       fillOpacity = 0.6)
+  
+```
+
+# Population Data
+
+For the choropleth map I will use state population as the variable to show. I'll get state population data from the @tidycensus package. If you haven't used this package before you will need to obtain a free API key. I have stored my API key in my .Renviron file.
+
+```{r}
+
+# specify API key stored in Renv
+tidycensus::census_api_key(Sys.getenv('CENSUS_API_KEY'))
+
+# Get total state population from census for 2010
+state_pop <- get_decennial(
+  geography = "state", 
+  variables = "P001001",
+  year = 2010
+)
+
+state_pop |>
+  DT::datatable(rownames = FALSE)
+
+```
+
+# Joining the data
+
+To make the choropleth map we need to join the data we want to map (state population) to the shapefile for the states.
+
+```{r Join data}
+
+dat_to_map <- states_sf %>% 
+  left_join(state_pop, by = c("name" = "NAME"))
+
+glimpse(dat_to_map)
+
+```
+
+# Making the map!
+
+Now we are finally ready to create our choropleth map.
+
+```{r Choropleth Leaflet}
+#| label: fig-leaflet-chorpleth
+#| fig-cap: Choropleth of US state populations
+
+# 'value' is the population column we are plotting
+
+# create color palette for choropleth based on chosen data to plot
+col_pal <- leaflet::colorNumeric(palette = "viridis",
+                                 domain = dat_to_map$value)
+
+  leaflet() %>% 
+  leaflet::addPolygons(data = dat_to_map,
+                       weight = 1,
+                       color = "black",
+                       popup = paste(dat_to_map$name, "<br>",
+                            round(dat_to_map$value) ),
+                       fillColor = ~col_pal(value),
+                       fillOpacity = 0.6) %>% 
+  addLegend(data = dat_to_map,
+            pal = col_pal,
+            values = ~value,
+            opacity = 1,
+            title = paste("State Population  <br>")
+            )
+
+```
+
+## Improving the map
+
+We now have a pretty nice looking choropleth, but let's make a few small improvements to the map:
+
+-   Format population numbers to make them easier to read
+
+-   Add title
+
+-   Add hover/highlight
+
+-   Change background color
+
+```{r}
+
+
+
+```
+
+## Plotting Alaska and Hawaii as inset
+
+So far we have excluded Alaska and Hawaii because they make it difficult to see the rest of the lower 48. The best solution would be to rescale them and include them as an inset(s).
+
+```{r}
+# 
+# 
+# states_map <- tigris::states(cb = TRUE, progress_bar = FALSE) %>%
+#   janitor::clean_names() %>%
+#   mutate(statefp = as.numeric(statefp)) %>%
+#   filter(statefp < 60) %>% 
+# #         !statefp %in% c(2, 15)) %>%
+#   rmapshaper::ms_simplify()
+# 
+# 
+# # code snippets from https://rud.is/b/2014/11/16/moving-the-earth-well-alaska-hawaii-with-r/
+#   
+# # extract, then rotate, shrink & move alaska (and reset projection)
+# # need to use state IDs via # https://www.census.gov/geo/reference/ansi_statetables.html
+# #alaska <- us_aea[us_aea$STATEFP=="02",]
+# alaska <- states_map %>% filter(statefp == 2)
+# alaska <- sf::as_Spatial(alaska)
+# alaska <- sp::elide(alaska, rotate=-50)
+# alaska <- sp::elide(alaska, scale=max(apply(sp::bbox(alaska), 1, diff)) / 2.3)
+# alaska <- sp::elide(alaska, shift=c(-2100000, -2500000))
+# proj4string(alaska) <- proj4string(sp::states_map)
+# 
+# # extract, then rotate & shift hawaii
+# hawaii <- us_aea[us_aea$STATEFP=="15",]
+# hawaii <- elide(hawaii, rotate=-35)
+# hawaii <- elide(hawaii, shift=c(5400000, -1400000))
+# proj4string(hawaii) <- sp::proj4string(us_aea)
+# 
+# # remove old states and put new ones back in; note the different order
+# # we're also removing puerto rico in this example but you can move it
+# # between texas and florida via similar methods to the ones we just used
+# us_aea <- us_aea[!us_aea$STATEFP %in% c("02", "15", "72"),]
+# us_aea <- rbind(us_aea, alaska, hawaii)
+# 
+# states_map_2 <- states_map %>% filter((statefp != 2))
+# 
+# states_map_2 <- sf::st_as_sf(alaska) %>% bind_rows(states_map_2 )
+
+```
+
+# Making the map with ggplot2
+
+I prefer *leaflet* because of the interactivity, but we can also make a nice looking choropleth with *ggplot2* @ggplot2. The data prep steps are basically the same, and the ggplot map is made using the *geom_sf* geom.
+
+```{r Choropleth ggplot2}
+#| label: fig-ggplot-choropleth
+#| fig-cap: Choropleth of US state populations made with ggplot2
+
+ggplot() +
+  ggplot2::geom_sf(data = dat_to_map,
+          aes(fill = value)) +
+  scale_fill_viridis_c(labels = scales::number_format(big.mark = ","),
+                       name = "Population") +
+  theme_void() +
+  labs(title = "2010 US State Populations")
+
+```
+
+# SessionInfo
+```{r}
+
+sessionInfo()
+
+```
+
+
+# References
